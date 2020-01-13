@@ -10,18 +10,18 @@ import (
 )
 
 type ClocFile struct {
-	Code     int32      `xml:"code,attr" json:"code"`
-	Comments int32      `xml:"comment,attr" json:"comment"`
-	Blanks   int32      `xml:"blank,attr" json:"blank"`
-	Name     string     `xml:"name,attr" json:"name"`
-	Lang     string     `xml:"language,attr" json"language"`
-	LineNum  LineNumber `xml:"line_num,attr" json:"line_num"`
+	Code     int32  `xml:"code,attr" json:"code"`
+	Comments int32  `xml:"comment,attr" json:"comment"`
+	Blanks   int32  `xml:"blank,attr" json:"blank"`
+	Name     string `xml:"name,attr" json:"name"`
+	Lang     string `xml:"language,attr" json"language"`
 }
 
 type LineNumber struct {
-	CodeLine     []int `xml:"code_line,attr" json:"code_line"`
-	CommentsLine []int `xml:"comments_line,attr" json:"comments_line"`
-	BlanksLine   []int `xml:"blanks_line,attr" json:"blanks_line"`
+	Name         string `xml:"name,attr" json:"name"`
+	CodeLine     []int  `xml:"code_line,attr" json:"code_line"`
+	CommentsLine []int  `xml:"comments_line,attr" json:"comments_line"`
+	BlanksLine   []int  `xml:"blanks_line,attr" json:"blanks_line"`
 }
 
 type ClocFiles []ClocFile
@@ -39,18 +39,18 @@ func (cf ClocFiles) Less(i, j int) bool {
 	return cf[i].Code > cf[j].Code
 }
 
-func AnalyzeFile(filename string, language *Language, opts *ClocOptions) *ClocFile {
+func AnalyzeFile(filename string, language *Language, opts *ClocOptions) (*ClocFile, *LineNumber) {
 	fp, err := os.Open(filename)
 	if err != nil {
 		// ignore error
-		return &ClocFile{Name: filename}
+		return &ClocFile{Name: filename}, &LineNumber{Name: filename}
 	}
 	defer fp.Close()
 
 	return AnalyzeReader(filename, language, fp, opts)
 }
 
-func AnalyzeReader(filename string, language *Language, file io.Reader, opts *ClocOptions) *ClocFile {
+func AnalyzeReader(filename string, language *Language, file io.Reader, opts *ClocOptions) (*ClocFile, *LineNumber) {
 	if opts.Debug {
 		fmt.Printf("filename=%v\n", filename)
 	}
@@ -60,6 +60,9 @@ func AnalyzeReader(filename string, language *Language, file io.Reader, opts *Cl
 		Lang: language.Name,
 	}
 
+	lineNumber := &LineNumber{
+		Name: filename,
+	}
 	lineNum := 0
 	isFirstLine := true
 	inComments := [][2]string{}
@@ -75,13 +78,13 @@ scannerloop:
 		line := strings.TrimSpace(lineOrg)
 
 		if len(strings.TrimSpace(line)) == 0 {
-			onBlank(clocFile, opts, len(inComments) > 0, line, lineOrg, lineNum)
+			onBlank(clocFile, lineNumber, opts, len(inComments) > 0, line, lineOrg, lineNum)
 			continue
 		}
 
 		// shebang line is 'code'
 		if isFirstLine && strings.HasPrefix(line, "#!") {
-			onCode(clocFile, opts, len(inComments) > 0, line, lineOrg, lineNum)
+			onCode(clocFile, lineNumber, opts, len(inComments) > 0, line, lineOrg, lineNum)
 			isFirstLine = false
 			continue
 		}
@@ -100,26 +103,26 @@ scannerloop:
 							break singleloop
 						}
 					}
-					onComment(clocFile, opts, len(inComments) > 0, line, lineOrg, lineNum)
+					onComment(clocFile, lineNumber, opts, len(inComments) > 0, line, lineOrg, lineNum)
 					continue scannerloop
 				}
 			}
 
 			if len(language.multiLines) == 0 {
-				onCode(clocFile, opts, len(inComments) > 0, line, lineOrg, lineNum)
+				onCode(clocFile, lineNumber, opts, len(inComments) > 0, line, lineOrg, lineNum)
 				continue scannerloop
 			}
 		}
 
 		if len(inComments) == 0 && !containsComment(line, language.multiLines) {
-			onCode(clocFile, opts, len(inComments) > 0, line, lineOrg, lineNum)
+			onCode(clocFile, lineNumber, opts, len(inComments) > 0, line, lineOrg, lineNum)
 			continue scannerloop
 		}
 
 		isCode := false
 		lenLine := len(line)
 		if len(language.multiLines) == 1 && len(language.multiLines[0]) == 2 && language.multiLines[0][0] == "" {
-			onCode(clocFile, opts, len(inComments) > 0, line, lineOrg, lineNum)
+			onCode(clocFile, lineNumber, opts, len(inComments) > 0, line, lineOrg, lineNum)
 			continue
 		}
 		for pos := 0; pos < lenLine; {
@@ -147,26 +150,26 @@ scannerloop:
 		}
 
 		if isCode {
-			onCode(clocFile, opts, len(inComments) > 0, line, lineOrg, lineNum)
+			onCode(clocFile, lineNumber, opts, len(inComments) > 0, line, lineOrg, lineNum)
 		} else {
-			onComment(clocFile, opts, len(inComments) > 0, line, lineOrg, lineNum)
+			onComment(clocFile, lineNumber, opts, len(inComments) > 0, line, lineOrg, lineNum)
 		}
 	}
 
 	if opts.Debug {
 		fmt.Printf("================================\n")
-		fmt.Printf("code_line=%v\n", clocFile.LineNum.CodeLine)
-		fmt.Printf("blanks_line=%v\n", clocFile.LineNum.BlanksLine)
-		fmt.Printf("comments_line=%v\n", clocFile.LineNum.CommentsLine)
+		fmt.Printf("code_line=%v\n", lineNumber.CodeLine)
+		fmt.Printf("blanks_line=%v\n", lineNumber.BlanksLine)
+		fmt.Printf("comments_line=%v\n", lineNumber.CommentsLine)
 		fmt.Printf("================================\n")
 	}
 
-	return clocFile
+	return clocFile, lineNumber
 }
 
-func onBlank(clocFile *ClocFile, opts *ClocOptions, isInComments bool, line, lineOrg string, lineNum int) {
+func onBlank(clocFile *ClocFile, lineNumber *LineNumber, opts *ClocOptions, isInComments bool, line, lineOrg string, lineNum int) {
 	clocFile.Blanks++
-	clocFile.LineNum.BlanksLine = append(clocFile.LineNum.BlanksLine, lineNum)
+	lineNumber.BlanksLine = append(lineNumber.BlanksLine, lineNum)
 	if opts.OnBlank != nil {
 		opts.OnBlank(line)
 	}
@@ -177,9 +180,9 @@ func onBlank(clocFile *ClocFile, opts *ClocOptions, isInComments bool, line, lin
 	}
 }
 
-func onComment(clocFile *ClocFile, opts *ClocOptions, isInComments bool, line, lineOrg string, lineNum int) {
+func onComment(clocFile *ClocFile, lineNumber *LineNumber, opts *ClocOptions, isInComments bool, line, lineOrg string, lineNum int) {
 	clocFile.Comments++
-	clocFile.LineNum.CommentsLine = append(clocFile.LineNum.CommentsLine, lineNum)
+	lineNumber.CommentsLine = append(lineNumber.CommentsLine, lineNum)
 	if opts.OnComment != nil {
 		opts.OnComment(line)
 	}
@@ -190,9 +193,9 @@ func onComment(clocFile *ClocFile, opts *ClocOptions, isInComments bool, line, l
 	}
 }
 
-func onCode(clocFile *ClocFile, opts *ClocOptions, isInComments bool, line, lineOrg string, lineNum int) {
+func onCode(clocFile *ClocFile, lineNumber *LineNumber, opts *ClocOptions, isInComments bool, line, lineOrg string, lineNum int) {
 	clocFile.Code++
-	clocFile.LineNum.CodeLine = append(clocFile.LineNum.CodeLine, lineNum)
+	lineNumber.CodeLine = append(lineNumber.CodeLine, lineNum)
 	if opts.OnCode != nil {
 		opts.OnCode(line)
 	}

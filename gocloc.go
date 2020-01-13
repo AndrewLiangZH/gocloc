@@ -10,6 +10,7 @@ type Result struct {
 	Files         map[string]*ClocFile
 	Languages     map[string]*Language
 	MaxPathLength int
+	LineNumFiles  map[string]*LineNumber
 }
 
 func NewProcessor(langs *DefinedLanguages, options *ClocOptions) *Processor {
@@ -37,16 +38,18 @@ func (p *Processor) Analyze(paths []string) (*Result, error) {
 		}
 	}
 	clocFiles := make(map[string]*ClocFile, num)
+	lineNumFiles := make(map[string]*LineNumber, num)
 
 	for _, language := range languages {
 		for _, file := range language.Files {
-			cf := AnalyzeFile(file, language, p.opts)
+			cf, ln := AnalyzeFile(file, language, p.opts)
 			cf.Lang = language.Name
 
 			language.Code += cf.Code
 			language.Comments += cf.Comments
 			language.Blanks += cf.Blanks
 			clocFiles[file] = cf
+			lineNumFiles[file] = ln
 		}
 
 		files := int32(len(language.Files))
@@ -65,5 +68,6 @@ func (p *Processor) Analyze(paths []string) (*Result, error) {
 		Files:         clocFiles,
 		Languages:     languages,
 		MaxPathLength: maxPathLen,
+		LineNumFiles:  lineNumFiles,
 	}, nil
 }

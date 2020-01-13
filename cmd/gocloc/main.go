@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"regexp"
 	"sort"
@@ -44,6 +45,8 @@ type CmdOptions struct {
 	Debug          bool   `long:"debug" description:"dump debug log for developer"`
 	SkipDuplicated bool   `long:"skip-duplicated" description:"skip duplicated files"`
 	ShowLang       bool   `long:"show-lang" description:"print about all languages and extensions"`
+	WhiteList      string `long:"whitelist" description:"read the whitelist"`
+	OutCodeLine    string `long:"out-code-Line" description:"output the line number statistics for whitelist files"`
 }
 
 func main() {
@@ -90,6 +93,14 @@ func main() {
 		clocOpts.ReMatchDir = regexp.MustCompile(opts.MatchDir)
 	}
 
+	// setup option for whitelist
+	whitelistTag := false
+	whitelist := make([]string, 0)
+	if opts.WhiteList != "" {
+		whitelistTag = true
+		gocloc.ReadWhitelistFiles(opts.WhiteList, &whitelist)
+	}
+
 	// setup option for include languages
 	for _, lang := range strings.Split(opts.IncludeLang, ",") {
 		if _, ok := languages.Langs[lang]; ok {
@@ -101,7 +112,13 @@ func main() {
 	clocOpts.SkipDuplicated = opts.SkipDuplicated
 
 	processor := gocloc.NewProcessor(languages, clocOpts)
-	result, err := processor.Analyze(paths)
+	var result *gocloc.Result
+	if whitelistTag == true {
+		fmt.Printf("%v\n", whitelist)
+		result, err = processor.Analyze(whitelist)
+	} else {
+		result, err = processor.Analyze(paths)
+	}
 	if err != nil {
 		fmt.Printf("fail gocloc analyze. error: %v\n", err)
 		return
@@ -113,6 +130,34 @@ func main() {
 	clocLangs := result.Languages
 	headerLen := 28
 	header := languageHeader
+	lineNumFiles := result.LineNumFiles
+
+	if whitelistTag == true && opts.OutCodeLine != "" {
+		// whitelistResults := make([]gocloc.WhitelistResult, len(lineNumFiles))
+		// for k, v := range lineNumFiles {
+		// 	var whitelistResult gocloc.WhitelistResult
+		// 	whitelistResult.FileName = k
+		// 	whitelistResult.CodeLine = v.CodeLine
+		// 	whitelistResult.CommentsLine = v.CommentsLine
+		// 	whitelistResult.BlanksLine = v.BlanksLine
+		// 	whitelistResults = append(whitelistResults, whitelistResult)
+		// }
+		buf, err := json.Marshal(lineNumFiles)
+		if err != nil {
+			fmt.Println(err)
+			panic("json marshal error")
+		}
+
+		fp, err := os.OpenFile(opts.OutCodeLine, os.O_RDWR|os.O_CREATE, 0755)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer fp.Close()
+		_, err = fp.Write(buf)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
 
 	// write header
 	if opts.Byfile {
