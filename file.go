@@ -10,11 +10,18 @@ import (
 )
 
 type ClocFile struct {
-	Code     int32  `xml:"code,attr" json:"code"`
-	Comments int32  `xml:"comment,attr" json:"comment"`
-	Blanks   int32  `xml:"blank,attr" json:"blank"`
-	Name     string `xml:"name,attr" json:"name"`
-	Lang     string `xml:"language,attr" json"language"`
+	Code     int32      `xml:"code,attr" json:"code"`
+	Comments int32      `xml:"comment,attr" json:"comment"`
+	Blanks   int32      `xml:"blank,attr" json:"blank"`
+	Name     string     `xml:"name,attr" json:"name"`
+	Lang     string     `xml:"language,attr" json"language"`
+	LineNum  LineNumber `xml:"line_num,attr" json:"line_num"`
+}
+
+type LineNumber struct {
+	CodeLine     []int `xml:"code_line,attr" json:"code_line"`
+	CommentsLine []int `xml:"comments_line,attr" json:"comments_line"`
+	BlanksLine   []int `xml:"blanks_line,attr" json:"blanks_line"`
 }
 
 type ClocFiles []ClocFile
@@ -146,11 +153,20 @@ scannerloop:
 		}
 	}
 
+	if opts.Debug {
+		fmt.Printf("================================\n")
+		fmt.Printf("code_line=%v\n", clocFile.LineNum.CodeLine)
+		fmt.Printf("blanks_line=%v\n", clocFile.LineNum.BlanksLine)
+		fmt.Printf("comments_line=%v\n", clocFile.LineNum.CommentsLine)
+		fmt.Printf("================================\n")
+	}
+
 	return clocFile
 }
 
 func onBlank(clocFile *ClocFile, opts *ClocOptions, isInComments bool, line, lineOrg string, lineNum int) {
 	clocFile.Blanks++
+	clocFile.LineNum.BlanksLine = append(clocFile.LineNum.BlanksLine, lineNum)
 	if opts.OnBlank != nil {
 		opts.OnBlank(line)
 	}
@@ -163,6 +179,7 @@ func onBlank(clocFile *ClocFile, opts *ClocOptions, isInComments bool, line, lin
 
 func onComment(clocFile *ClocFile, opts *ClocOptions, isInComments bool, line, lineOrg string, lineNum int) {
 	clocFile.Comments++
+	clocFile.LineNum.CommentsLine = append(clocFile.LineNum.CommentsLine, lineNum)
 	if opts.OnComment != nil {
 		opts.OnComment(line)
 	}
@@ -175,6 +192,7 @@ func onComment(clocFile *ClocFile, opts *ClocOptions, isInComments bool, line, l
 
 func onCode(clocFile *ClocFile, opts *ClocOptions, isInComments bool, line, lineOrg string, lineNum int) {
 	clocFile.Code++
+	clocFile.LineNum.CodeLine = append(clocFile.LineNum.CodeLine, lineNum)
 	if opts.OnCode != nil {
 		opts.OnCode(line)
 	}
