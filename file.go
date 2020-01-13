@@ -53,6 +53,7 @@ func AnalyzeReader(filename string, language *Language, file io.Reader, opts *Cl
 		Lang: language.Name,
 	}
 
+	lineNum := 0
 	isFirstLine := true
 	inComments := [][2]string{}
 	buf := getByteSlice()
@@ -62,17 +63,18 @@ func AnalyzeReader(filename string, language *Language, file io.Reader, opts *Cl
 
 scannerloop:
 	for scanner.Scan() {
+		lineNum++
 		lineOrg := scanner.Text()
 		line := strings.TrimSpace(lineOrg)
 
 		if len(strings.TrimSpace(line)) == 0 {
-			onBlank(clocFile, opts, len(inComments) > 0, line, lineOrg)
+			onBlank(clocFile, opts, len(inComments) > 0, line, lineOrg, lineNum)
 			continue
 		}
 
 		// shebang line is 'code'
 		if isFirstLine && strings.HasPrefix(line, "#!") {
-			onCode(clocFile, opts, len(inComments) > 0, line, lineOrg)
+			onCode(clocFile, opts, len(inComments) > 0, line, lineOrg, lineNum)
 			isFirstLine = false
 			continue
 		}
@@ -91,26 +93,26 @@ scannerloop:
 							break singleloop
 						}
 					}
-					onComment(clocFile, opts, len(inComments) > 0, line, lineOrg)
+					onComment(clocFile, opts, len(inComments) > 0, line, lineOrg, lineNum)
 					continue scannerloop
 				}
 			}
 
 			if len(language.multiLines) == 0 {
-				onCode(clocFile, opts, len(inComments) > 0, line, lineOrg)
+				onCode(clocFile, opts, len(inComments) > 0, line, lineOrg, lineNum)
 				continue scannerloop
 			}
 		}
 
 		if len(inComments) == 0 && !containsComment(line, language.multiLines) {
-			onCode(clocFile, opts, len(inComments) > 0, line, lineOrg)
+			onCode(clocFile, opts, len(inComments) > 0, line, lineOrg, lineNum)
 			continue scannerloop
 		}
 
 		isCode := false
 		lenLine := len(line)
 		if len(language.multiLines) == 1 && len(language.multiLines[0]) == 2 && language.multiLines[0][0] == "" {
-			onCode(clocFile, opts, len(inComments) > 0, line, lineOrg)
+			onCode(clocFile, opts, len(inComments) > 0, line, lineOrg, lineNum)
 			continue
 		}
 		for pos := 0; pos < lenLine; {
@@ -138,47 +140,47 @@ scannerloop:
 		}
 
 		if isCode {
-			onCode(clocFile, opts, len(inComments) > 0, line, lineOrg)
+			onCode(clocFile, opts, len(inComments) > 0, line, lineOrg, lineNum)
 		} else {
-			onComment(clocFile, opts, len(inComments) > 0, line, lineOrg)
+			onComment(clocFile, opts, len(inComments) > 0, line, lineOrg, lineNum)
 		}
 	}
 
 	return clocFile
 }
 
-func onBlank(clocFile *ClocFile, opts *ClocOptions, isInComments bool, line, lineOrg string) {
+func onBlank(clocFile *ClocFile, opts *ClocOptions, isInComments bool, line, lineOrg string, lineNum int) {
 	clocFile.Blanks++
 	if opts.OnBlank != nil {
 		opts.OnBlank(line)
 	}
 
 	if opts.Debug {
-		fmt.Printf("[BLNK, cd:%d, cm:%d, bk:%d, iscm:%v] %s\n",
-			clocFile.Code, clocFile.Comments, clocFile.Blanks, isInComments, lineOrg)
+		fmt.Printf("[BLNK, cd:%d, cm:%d, bk:%d, iscm:%v, line_num:%d] %s\n",
+			clocFile.Code, clocFile.Comments, clocFile.Blanks, isInComments, lineNum, lineOrg)
 	}
 }
 
-func onComment(clocFile *ClocFile, opts *ClocOptions, isInComments bool, line, lineOrg string) {
+func onComment(clocFile *ClocFile, opts *ClocOptions, isInComments bool, line, lineOrg string, lineNum int) {
 	clocFile.Comments++
 	if opts.OnComment != nil {
 		opts.OnComment(line)
 	}
 
 	if opts.Debug {
-		fmt.Printf("[COMM, cd:%d, cm:%d, bk:%d, iscm:%v] %s\n",
-			clocFile.Code, clocFile.Comments, clocFile.Blanks, isInComments, lineOrg)
+		fmt.Printf("[COMM, cd:%d, cm:%d, bk:%d, iscm:%v, line_num:%d] %s\n",
+			clocFile.Code, clocFile.Comments, clocFile.Blanks, isInComments, lineNum, lineOrg)
 	}
 }
 
-func onCode(clocFile *ClocFile, opts *ClocOptions, isInComments bool, line, lineOrg string) {
+func onCode(clocFile *ClocFile, opts *ClocOptions, isInComments bool, line, lineOrg string, lineNum int) {
 	clocFile.Code++
 	if opts.OnCode != nil {
 		opts.OnCode(line)
 	}
 
 	if opts.Debug {
-		fmt.Printf("[CODE, cd:%d, cm:%d, bk:%d, iscm:%v] %s\n",
-			clocFile.Code, clocFile.Comments, clocFile.Blanks, isInComments, lineOrg)
+		fmt.Printf("[CODE, cd:%d, cm:%d, bk:%d, iscm:%v, line_num:%d] %s\n",
+			clocFile.Code, clocFile.Comments, clocFile.Blanks, isInComments, lineNum, lineOrg)
 	}
 }
