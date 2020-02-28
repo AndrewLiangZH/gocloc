@@ -132,7 +132,7 @@ func main() {
 	header := languageHeader
 	lineNumFiles := result.LineNumFiles
 
-	if whitelistTag == true && opts.OutCodeLine != "" {
+	if opts.OutCodeLine != "" {
 		// whitelistResults := make([]gocloc.WhitelistResult, len(lineNumFiles))
 		// for k, v := range lineNumFiles {
 		// 	var whitelistResult gocloc.WhitelistResult
