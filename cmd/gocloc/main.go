@@ -45,6 +45,7 @@ type CmdOptions struct {
 	Debug          bool   `long:"debug" description:"dump debug log for developer"`
 	SkipDuplicated bool   `long:"skip-duplicated" description:"skip duplicated files"`
 	ShowLang       bool   `long:"show-lang" description:"print about all languages and extensions"`
+	BlackPath      string `long:"blackpath" description:"exclude dir name (separated commas)"`
 	WhiteList      string `long:"whitelist" description:"read the whitelist"`
 	OutCodeLine    string `long:"out-code-Line" description:"output the line number statistics for whitelist files"`
 }
@@ -85,11 +86,30 @@ func main() {
 		}
 	}
 
-	// setup option for not match directory
-	if opts.NotMatchDir != "" {
+	// setup option for blackpath && not match directory
+	if opts.BlackPath != "" {
+		var blackpath string
+		blackpath = opts.BlackPath
+		blackpath = strings.ReplaceAll(blackpath, "/,", "|")
+		blackpath = strings.ReplaceAll(blackpath, ",", "|")
+		if strings.HasSuffix(blackpath, "/") {
+			blackpath = strings.TrimSuffix(blackpath, "/")
+		}
+		if strings.HasSuffix(blackpath, "|") {
+			blackpath = strings.TrimSuffix(blackpath, "|")
+		}
+		if opts.NotMatchDir != "" {
+			clocOpts.ReNotMatchDir = regexp.MustCompile(opts.NotMatchDir + "|" + blackpath)
+		} else {
+			clocOpts.ReNotMatchDir = regexp.MustCompile(blackpath)
+		}
+	} else if opts.NotMatchDir != "" {
 		clocOpts.ReNotMatchDir = regexp.MustCompile(opts.NotMatchDir)
 	}
-	if opts.MatchDir != "" {
+
+	// setup option for not match directory
+
+	if opts.MatchDir != "" && opts.BlackPath == "" {
 		clocOpts.ReMatchDir = regexp.MustCompile(opts.MatchDir)
 	}
 
